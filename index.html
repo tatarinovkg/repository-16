@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Каникулы</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f0f0f5;
+            padding: 20px;
+            text-align: center;
+            box-sizing: border-box;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            max-width: 90%;
+            margin: 0 auto;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            box-sizing: border-box;
+            font-size: 16px;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        .form-group input:focus {
+            border-color: #007bff;
+            outline: none;
+            box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+        }
+
+        .form-group input.error {
+            border-color: #ff0000;
+            box-shadow: 0 0 5px rgba(255, 0, 0, 0.5);
+        }
+
+        .form-group input.success {
+            border-color: #00cc00;
+            box-shadow: 0 0 5px rgba(0, 204, 0, 0.5);
+        }
+
+        .submit-button,
+        .holidays-button {
+            width: 90%;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+            margin-top: 20px;
+        }
+
+        .submit-button {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .submit-button:disabled {
+            background-color: #99ccff;
+            cursor: not-allowed;
+        }
+
+        .holidays-button {
+            background-color: #ff0000;
+            color: white;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .holidays-button:disabled {
+            background-color: #ffcccc;
+            cursor: not-allowed;
+        }
+
+        .fill {
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.5);
+            position: absolute;
+            top: 0;
+            left: 0;
+            transition: width 0.5s linear; /* Сделаем анимацию более быстрой */
+            width: 0%;
+            z-index: 2;
+        }
+    </style>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+<div class="container">
+    <h2>Статус каникул</h2>
+    <div id="statusMessage" class="message">Загрузка статуса...</div>
+    <button class="holidays-button" id="holidaysButton" disabled>
+        <div class="fill" id="fillBar"></div>
+        Включить каникулы
+    </button>
+    <div class="form-group">
+        <input type="password" id="password" placeholder="Введите пароль" oninput="toggleSubmitButton()">
+    </div>
+    <button class="submit-button" id="checkPasswordButton" disabled onclick="checkPassword()">Проверить пароль</button>
+</div>
+
+<script>
+    let tg = window.Telegram.WebApp;
+    tg.expand();
+    tg.MainButton.setText("Закрыть приложение");
+    tg.MainButton.show();
+
+    tg.MainButton.onClick(function() {
+        tg.close();
+    });
+
+    let holidaysStatus = false;
+    const passwordInput = document.getElementById('password');
+    const checkPasswordButton = document.getElementById('checkPasswordButton');
+    const holidaysButton = document.getElementById('holidaysButton');
+    const fillBar = document.getElementById('fillBar');
+
+    function toggleSubmitButton() {
+        const hasText = passwordInput.value.trim();
+        checkPasswordButton.disabled = !hasText;
+        passwordInput.classList.remove('success', 'error');
+
+        if (!hasText) {
+            holidaysButton.disabled = true;
+        }
+    }
+
+    async function checkPassword() {
+        const password = passwordInput.value.trim();
+        const response = await fetch('https://louse-precious-sincerely.ngrok-free.app/api/check_password', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ password })
+        });
+        const data = await response.json();
+        if (data.success) {
+            passwordInput.classList.remove('error');
+            passwordInput.classList.add('success');
+            holidaysButton.disabled = false;
+        } else {
+            passwordInput.classList.remove('success');
+            passwordInput.classList.add('error');
+            holidaysButton.disabled = true;
+        }
+    }
+
+    holidaysButton.addEventListener('mousedown', startFill);
+    holidaysButton.addEventListener('touchstart', startFill);
+
+    holidaysButton.addEventListener('mouseup', handleHolidaysToggle);
+    holidaysButton.addEventListener('touchend', handleHolidaysToggle);
+
+    function startFill(event) {
+        event.preventDefault();
+        if (holidaysButton.disabled) return;
+
+        fillBar.style.width = '100%';
+    }
+
+    function handleHolidaysToggle(event) {
+        if (holidaysButton.disabled) return;
+
+        fillBar.style.width = '0%';
+        holidaysStatus = !holidaysStatus; // Переключаем статус каникул
+
+        tg.sendData(JSON.stringify({
+            appId: 'holidays',
+            holidays: holidaysStatus
+        }));
+        tg.close(); // Закрываем приложение сразу после переключения
+    }
+
+    async function loadStatus() {
+        try {
+            const response = await fetch('https://louse-precious-sincerely.ngrok-free.app/api/get_holidays_status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (!response.ok) {
+                throw new Error('Ошибка сети: ' + response.status);
+            }
+            const data = await response.json();
+            holidaysStatus = data.holidays;
+            const statusMessage = document.getElementById('statusMessage');
+            const holidaysButton = document.getElementById('holidaysButton');
+            if (holidaysStatus) {
+                statusMessage.textContent = "Каникулы включены.";
+                holidaysButton.textContent = "Выключить каникулы";
+            } else {
+                statusMessage.textContent = "Каникулы выключены.";
+                holidaysButton.textContent = "Включить каникулы";
+            }
+        } catch (error) {
+            console.error('Ошибка при загрузке статуса каникул:', error);
+            const statusMessage = document.getElementById('statusMessage');
+            statusMessage.textContent = "Не удалось загрузить статус каникул.";
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadStatus);
+</script>
+</body>
+</html>
